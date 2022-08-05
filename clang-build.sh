@@ -1,63 +1,56 @@
 #!/usr/bin/env bash
 #
-# Build Script for Biofrost Kramel [CLANG]
-# Copyright (C) 2022-2023 Mar Yvan D.
+# Build Script for Biofrost Kramel
 #
+
+set -uo pipefail
 
 # MMDA Clearing Operation (anti re-send)
 echo "Clearing Environment"
+git clean -fdx
 rm -rf $(pwd)/AnyKernel/*.zip
-echo "Nuking DTB and DTBO in AK3 Folder"
 rm -rf $(pwd)/AnyKernel/Image.gz-dtb && rm -rf $(pwd)/AnyKernel/dtbo.img
-echo "Nuking out Folder"
-rm -rf $(pwd)/out
-echo "Cleaning Completed."
 
-# Toolchain link is only needed for CI Purposes.
-echo "Cloning Toolchain | Compiler (Clang)"
-git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
-echo "Cloning AnyKernel3"
-git clone --depth=1 https://github.com/mcdofrenchfreis/AnyKernel3.git -b biofrost AnyKernel
-echo "Cloning Dependencies Done!"
+# Dependency Cloning.
+echo "Cloning Toolchain | AnyKernel3"
+git clone --depth=1 --quiet https://gitlab.com/RealJohnGalt/clang-master.git clang
+git clone --depth=1 --quiet https://github.com/mcdofrenchfreis/AnyKernel3.git -b biofrost AnyKernel
+echo "Cloning depencies are done."
 
-# GitHub Repository Link.
-export REPO_URL="https://github.com/mcdofrenchfreis/biofrost-oss-r5x"
-
-# Default kernel directory.
-KDIR=$(pwd)
-
-# Main
-DTBO=${KDIR}/out/arch/arm64/boot/dtbo.img
-IMAGE=${KDIR}/out/arch/arm64/boot/Image.gz-dtb
+# Main Variables
+DTBO=$(pwd)/out/arch/arm64/boot/dtbo.img
+IMAGE=$(pwd)/out/arch/arm64/boot/Image.gz-dtb
 DATE=$(TZ=Asia/Singapore date +"%Y%m%d-%s")
 START=$(date +"%s")
+KDIR=$(pwd)
 export ARCH=arm64
+
+# Kernel name/version Variables
+KNAME="Biofrost"
+MIN_HEAD=$(git rev-parse HEAD)
+VERSION="$(cat version)/$(echo ${MIN_HEAD:0:7})"
+
+export LOCALVERSION="-${KNAME}-$(echo "${VERSION}")"
+
+# GitHub Variables
+export COMMIT_HASH=$(git rev-parse --short HEAD)
+export REPO_URL="https://github.com/mcdofrenchfreis/biofrost-kernel-realme-r5x"
 
 # Default compiler directory.
 TCDIR=${KDIR}/clang
 
-# Maintainer and Host Information.
-export KBUILD_BUILD_USER="xevan"
+# Default device defconfig used.
+DEFCONFIG=biofrost_defconfig
+
+# Build Information
+export COMPILER_NAME="$(${TCDIR}/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')"
+export LINKER_NAME="$("${TCDIR}"/bin/ld.lld --version | head -n 1 | sed 's/(compatible with [^)]*)//' | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')"
+
+export KBUILD_BUILD_USER=xevan
 export KBUILD_BUILD_HOST=ArchLinux
 
-# Compiler + Linker information.
-export COMPILER_NAME="$(${TCDIR}/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')"
-export LINKER_NAME="$("${TCDIR}"/bin/ld.bfd --version | head -n 1 | sed 's/(compatible with [^)]*)//' | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')"
-
-# Device name.
 export DEVICE="Realme 5 Series"
-
-# Kernel Version
-export VERSION="R0406"
-
-# Device codename.
 export CODENAME="realme_trinket"
-
-# Top Commit Information (commit hash).
-export COMMIT_HASH=$(git rev-parse --short HEAD)
-
-# Default device defconfig used.
-DEVICE_DEFCONFIG=biofrost_defconfig
 
 # Telegram Bot Information.
 bot_token="bot5129489057:AAF5o-JfQ1iAUp9Min7Jcr9sHPjTpCaIlA8"
@@ -70,8 +63,8 @@ else
     chat_id="-1001525610478"
 fi
 
-# Zip Details
-export ZIP_NAME="Biofrost-${VERSION}-${DATE}"
+# Zipping Details
+export ZIP_NAME="Biofrost-${DATE}"
 
 # Post Main Information
 function sendinfo() {
@@ -89,7 +82,7 @@ function push() {
         -F chat_id="$chat_id" \
         -F "disable_web_page_preview=true" \
         -F "parse_mode=html" \
-        -F caption="Build took $(($DIFF / 60)) minutes and $(($DIFF % 60)) seconds. | <b>Compiled with: ${COMPILER_NAME}+ ${LINKER_NAME}.</b>"
+        -F caption="Build took $(($DIFF / 60)) minutes and $(($DIFF % 60)) seconds. | <b>Compiled with: ${COMPILER_NAME} + ${LINKER_NAME}.</b>"
 }
 # Error? Press F
 function finerr() {
@@ -102,7 +95,7 @@ function finerr() {
 }
 # Compile >.<
 function compile() {
-    make O=out ARCH=arm64 ${DEVICE_DEFCONFIG}
+    make O=out ARCH=arm64 ${DEFCONFIG}
     make -j$(nproc --all) O=out \
               PATH=${TCDIR}/bin/:${PATH} \
               ARCH=arm64 \
